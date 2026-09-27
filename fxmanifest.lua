@@ -32,3 +32,5 @@ files {
     'html/style.css',
     'html/logo.png',
 }
+
+dependency 'qb-vehiclekeys'

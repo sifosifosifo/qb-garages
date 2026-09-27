@@ -145,6 +145,7 @@ QBCore.Functions.CreateCallback('qb-garages:server:spawnvehicle', function(sourc
     local vehProps = {}
     if ownedVehicle.mods then vehProps = json.decode(ownedVehicle.mods) end
     OutsideVehicles[plate] = { netID = netId, entity = veh }
+    exports['qb-vehiclekeys']:GiveKeys(source, plate)
     cb(netId, vehProps, plate)
 end)
 
