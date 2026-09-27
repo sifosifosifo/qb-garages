@@ -1,309 +1,119 @@
 const isBrowserPreview = typeof GetParentResourceName !== "function";
+let vehicles = [];
+let activeFilter = "all";
 
-window.addEventListener("message", function (event) {
+window.addEventListener("message", event => {
     const data = event.data;
     if (data.action === "VehicleList") {
-        const garageLabel = data.garageLabel;
-        const vehicles = data.vehicles;
-        populateVehicleList(garageLabel, vehicles);
+        vehicles = Array.isArray(data.vehicles) ? data.vehicles : [];
+        document.getElementById("garage-header").textContent = data.garageLabel || "Garage";
+        render();
         displayUI();
     }
 });
 
-if (isBrowserPreview) {
-    const previewVehicles = [
-        {
-            vehicle: "sultan",
-            vehicleLabel: "Karin Sultan",
-            plate: "PREVIEW1",
-            state: 1,
-            fuel: 82,
-            engine: 910,
-            body: 760,
-            distance: 1240,
-            garage: "Legion Square",
-            type: "public",
-            index: "legion",
-            depotPrice: 0,
-            balance: 0,
-        },
-        {
-            vehicle: "blista",
-            vehicleLabel: "Dinka Blista",
-            plate: "PREVIEW2",
-            state: 1,
-            fuel: 45,
-            engine: 620,
-            body: 480,
-            distance: 3875,
-            garage: "Legion Square",
-            type: "public",
-            index: "legion",
-            depotPrice: 0,
-            balance: 1250,
-        },
-        {
-            vehicle: "buffalo",
-            vehicleLabel: "Bravado Buffalo",
-            plate: "PREVIEW3",
-            state: 0,
-            fuel: 68,
-            engine: 840,
-            body: 930,
-            distance: 520,
-            garage: "Legion Square",
-            type: "public",
-            index: "legion",
-            depotPrice: 500,
-            balance: 0,
-        },
-    ];
+document.addEventListener("keydown", event => { if (event.key === "Escape") closeGarageMenu(); });
+document.getElementById("close-btn").addEventListener("click", closeGarageMenu);
 
-    document.body.classList.add("browser-preview");
-    populateVehicleList("Legion Square", previewVehicles);
-    displayUI();
-}
-
-document.addEventListener("keydown", function (event) {
-    if (event.key === "Escape") {
-        closeGarageMenu();
-    }
+document.querySelectorAll(".filter").forEach(button => {
+    button.addEventListener("click", () => {
+        activeFilter = button.dataset.filter;
+        document.querySelectorAll(".filter").forEach(b => b.classList.remove("active"));
+        button.classList.add("active");
+        render();
+    });
 });
-
-function closeGarageMenu() {
-    const container = document.querySelector(".container");
-    container.style.display = "none";
-
-    postNui("closeGarage", {})
-        .then((data) => {
-            if (data === "ok") {
-                return;
-            } else {
-                console.error("Failed to close Garage UI");
-            }
-        });
-}
+document.getElementById("search").addEventListener("input", render);
 
 function postNui(endpoint, payload) {
-    if (isBrowserPreview) {
-        return Promise.resolve("ok");
-    }
-
+    if (isBrowserPreview) return Promise.resolve("ok");
     return fetch(`https://qb-garages/${endpoint}`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json; charset=UTF-8",
-        },
-        body: JSON.stringify(payload),
-    }).then((response) => response.json());
+        method:"POST",
+        headers:{"Content-Type":"application/json; charset=UTF-8"},
+        body:JSON.stringify(payload)
+    }).then(response => response.json());
 }
-
-function displayUI() {
-    const container = document.querySelector(".container");
-    container.style.display = "block";
+function closeGarageMenu() {
+    document.getElementById("garage-shell").style.display = "none";
+    postNui("closeGarage", {}).catch(() => {});
 }
+function displayUI() { document.getElementById("garage-shell").style.display = "flex"; }
 
-function populateVehicleList(garageLabel, vehicles) {
-    const vehicleContainerElem = document.querySelector(".vehicle-table");
-    const fragment = document.createDocumentFragment();
-
-    while (vehicleContainerElem.firstChild) {
-        vehicleContainerElem.removeChild(vehicleContainerElem.firstChild);
+function getStatus(v) {
+    if (v.state === 2) return {text:"Impound", className:"impound", disabled:true};
+    if (v.state === 0) return {text:"Out", className:"out", disabled:false};
+    if (v.depotPrice > 0 && v.type === "public") return {text:"Depot", className:"out", disabled:true};
+    if (v.depotPrice > 0 && v.type === "depot") return {text:"$" + Number(v.depotPrice).toFixed(0), className:"stored", disabled:false};
+    return {text:"Take Out", className:"stored", disabled:false};
+}
+function clamp(value,max) {
+    const n = Number(value) || 0;
+    return Math.max(0,Math.min(100,(n/max)*100));
+}
+function metric(label,value,max) {
+    const percent = Math.round(clamp(value,max));
+    const tone = percent < 35 ? "danger" : percent < 65 ? "warn" : "";
+    return `<div class="metric"><div class="metric-head"><span>${label}</span><strong>${percent}%</strong></div><div class="bar ${tone}"><span style="width:${percent}%"></span></div></div>`;
+}
+function carSvg() {
+    return `<svg viewBox="0 0 180 70" aria-hidden="true"><path d="M23 45l8-20c2-5 6-8 12-9l30-5c5-1 11-1 16 1l28 10c5 2 9 6 11 11l5 12H23zm16-21-6 14h35V20l-21 4c-4 0-7 0-8 0zm35-5v19h36l-8-12c-1-2-4-4-7-5l-17-5c-1 0-2 0-4 0zM43 57a9 9 0 1 0 0-18 9 9 0 0 0 0 18zm78 0a9 9 0 1 0 0-18 9 9 0 0 0 0 18z"/></svg>`;
+}
+function createVehicleCard(v) {
+    const status = getStatus(v);
+    const balance = Number(v.balance) || 0;
+    const card = document.createElement("article");
+    card.className = "vehicle-card";
+    card.innerHTML = `
+        <div class="vehicle-top"><div class="vehicle-title"><h3>${escapeHtml(v.vehicleLabel || v.vehicle || "Unknown Vehicle")}</h3><span class="plate">${escapeHtml(v.plate || "NO PLATE")}</span></div><span class="status ${status.className}">${status.text}</span></div>
+        <div class="vehicle-art">${carSvg()}</div>
+        <div class="metrics">${metric("Fuel",v.fuel,100)}${metric("Engine",v.engine,1000)}${metric("Body",v.body,1000)}</div>
+        <div class="card-bottom"><div class="finance">${balance > 0 ? "Finance: <strong>$" + balance.toFixed(0) + "</strong>" : "Finance: <strong>Paid off</strong>"}</div><button class="drive-btn" ${status.disabled ? "disabled" : ""}>${status.text}</button></div>`;
+    card.querySelector(".drive-btn").addEventListener("click", () => takeAction(v,status));
+    return card;
+}
+function takeAction(v,status) {
+    if (status.disabled) return;
+    const vehicleData = {vehicle:v.vehicle,garage:v.garage,index:v.index,plate:v.plate,type:v.type,depotPrice:v.depotPrice,stats:{fuel:v.fuel,engine:v.engine,body:v.body}};
+    if (status.text === "Out") {
+        postNui("trackVehicle",v.plate).then(data => { if(data === "ok") closeGarageMenu(); });
+    } else if (v.depotPrice > 0) {
+        postNui("takeOutDepo",vehicleData).then(data => { if(data === "ok") closeGarageMenu(); });
+    } else {
+        postNui("takeOutVehicle",vehicleData).then(data => { if(data === "ok") closeGarageMenu(); });
     }
-
-    const garageHeader = document.getElementById("garage-header");
-    garageHeader.textContent = garageLabel;
-
-    vehicles.forEach((v) => {
-        const vehicleItem = document.createElement("div");
-        vehicleItem.classList.add("vehicle-item");
-
-        // Vehicle Info: Name, Plate & Mileage
-        const vehicleInfo = document.createElement("div");
-        vehicleInfo.classList.add("vehicle-info");
-
-        const vehicleName = document.createElement("span");
-        vehicleName.classList.add("vehicle-name");
-        vehicleName.textContent = v.vehicleLabel;
-        vehicleInfo.appendChild(vehicleName);
-
-        const plate = document.createElement("span");
-        plate.classList.add("plate");
-        plate.textContent = v.plate;
-        vehicleInfo.appendChild(plate);
-
-        const mileage = document.createElement("span");
-        mileage.classList.add("mileage");
-        mileage.textContent = `${v.distance}mi`;
-        vehicleInfo.appendChild(mileage);
-
-        vehicleItem.appendChild(vehicleInfo);
-
-        // Finance Info
-        const financeDriveContainer = document.createElement("div");
-        financeDriveContainer.classList.add("finance-drive-container");
-        const financeInfo = document.createElement("div");
-        financeInfo.classList.add("finance-info");
-
-        if (v.balance && v.balance > 0) {
-            financeInfo.textContent = "Balance: $" + v.balance.toFixed(0);
-        } else {
-            financeInfo.textContent = "Paid Off";
-        }
-
-        financeDriveContainer.appendChild(financeInfo);
-
-        // Drive Button
-        let status;
-        let isDepotPrice = false;
-
-        if (v.state === 0) {
-            if (v.depotPrice && v.depotPrice > 0) {
-                isDepotPrice = true;
-
-                if (v.type === "public") {
-                    status = "Depot";
-                } else if (v.type === "depot") {
-                    status = "$" + v.depotPrice.toFixed(0);
-                } else {
-                    status = "Out";
-                }
-            } else {
-                status = "Out";
-            }
-        } else if (v.state === 1) {
-            if (v.depotPrice && v.depotPrice > 0) {
-                isDepotPrice = true;
-
-                if (v.type === "depot") {
-                    status = "$" + v.depotPrice.toFixed(0);
-                } else if (v.type === "public") {
-                    status = "Depot";
-                } else {
-                    status = "Drive";
-                }
-            } else {
-                status = "Drive";
-            }
-        } else if (v.state === 2) {
-            status = "Impound";
-        }
-
-        const driveButton = document.createElement("button");
-        driveButton.classList.add("drive-btn");
-        driveButton.textContent = status;
-
-        if (status === "Depot" || status === "Impound") {
-            driveButton.style.backgroundColor = "#222";
-            driveButton.disabled = true;
-        }
-
-        if (status === "Out") {
-            driveButton.style.backgroundColor = "#222";
-        }
-
-        driveButton.onclick = function () {
-            if (driveButton.disabled) return;
-
-            const vehicleStats = {
-                fuel: v.fuel,
-                engine: v.engine,
-                body: v.body,
-            };
-
-            const vehicleData = {
-                vehicle: v.vehicle,
-                garage: v.garage,
-                index: v.index,
-                plate: v.plate,
-                type: v.type,
-                depotPrice: v.depotPrice,
-                stats: vehicleStats,
-            };
-
-            if (status === "Out") {
-                postNui("trackVehicle", v.plate)
-                    .then((data) => {
-                        if (data === "ok") {
-                            closeGarageMenu();
-                        } else {
-                            return;
-                        }
-                    });
-            } else if (isDepotPrice) {
-                postNui("takeOutDepo", vehicleData)
-                    .then((data) => {
-                        if (data === "ok") {
-                            closeGarageMenu();
-                        } else {
-                            console.error("Failed to pay depot price.");
-                        }
-                    });
-            } else {
-                postNui("takeOutVehicle", vehicleData)
-                    .then((data) => {
-                        if (data === "ok") {
-                            closeGarageMenu();
-                        } else {
-                            console.error("Failed to close Garage UI.");
-                        }
-                    });
-            }
-        };
-
-        financeDriveContainer.appendChild(driveButton);
-        vehicleItem.appendChild(financeDriveContainer);
-
-        // Progress Bars: Fuel, Engine, Body
-        const stats = document.createElement("div");
-        stats.classList.add("stats");
-
-        const maxValues = {
-            fuel: 100,
-            engine: 1000,
-            body: 1000,
-        };
-
-        ["fuel", "engine", "body"].forEach((statLabel) => {
-            const stat = document.createElement("div");
-            stat.classList.add("stat");
-            const label = document.createElement("div");
-            label.classList.add("label");
-            label.textContent = statLabel.charAt(0).toUpperCase() + statLabel.slice(1);
-            stat.appendChild(label);
-            const progressBar = document.createElement("div");
-            progressBar.classList.add("progress-bar");
-            const progress = document.createElement("span");
-            const progressText = document.createElement("span");
-            progressText.classList.add("progress-text");
-            const percentage = (v[statLabel] / maxValues[statLabel]) * 100;
-            progress.style.width = percentage + "%";
-            progressText.textContent = Math.round(percentage) + "%";
-
-            if (percentage >= 75) {
-                progress.classList.add("bar-green");
-                if (percentage > 45) {
-                    progressText.style.color = "var(--md-on-success)";
-                }
-            } else if (percentage >= 50) {
-                progress.classList.add("bar-yellow");
-                if (percentage > 45) {
-                    progressText.style.color = "var(--md-on-warning)";
-                }
-            } else {
-                progress.classList.add("bar-red");
-                // Keep default text color for low percentages
-            }
-
-            progressBar.appendChild(progressText);
-            progressBar.appendChild(progress);
-            stat.appendChild(progressBar);
-            stats.appendChild(stat);
-            vehicleItem.appendChild(stats);
-        });
-
-        fragment.appendChild(vehicleItem);
+}
+function render() {
+    const query = document.getElementById("search").value.trim().toLowerCase();
+    const container = document.getElementById("vehicle-container");
+    const empty = document.getElementById("empty");
+    const stored = vehicles.filter(v => v.state === 1);
+    const out = vehicles.filter(v => v.state === 0);
+    document.getElementById("vehicle-count").textContent = vehicles.length;
+    document.getElementById("stored-count").textContent = stored.length;
+    document.getElementById("all-count").textContent = vehicles.length;
+    document.getElementById("stored-filter-count").textContent = stored.length;
+    document.getElementById("out-count").textContent = out.length;
+    const filtered = vehicles.filter(v => {
+        const matchesFilter = activeFilter === "all" || (activeFilter === "stored" && v.state === 1) || (activeFilter === "out" && v.state === 0);
+        const text = ((v.vehicleLabel || "") + " " + (v.vehicle || "") + " " + (v.plate || "")).toLowerCase();
+        return matchesFilter && text.includes(query);
     });
+    container.replaceChildren(...filtered.map(createVehicleCard));
+    empty.style.display = filtered.length ? "none" : "flex";
+}
+function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g,char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[char]));
+}
 
-    vehicleContainerElem.appendChild(fragment);
+if (isBrowserPreview) {
+    document.body.classList.add("browser-preview");
+    vehicles = [
+        {vehicle:"sultan",vehicleLabel:"Karin Sultan RS",plate:"SIFO 01",state:1,fuel:92,engine:910,body:760,garage:"Legion Square",type:"public",index:"legion",depotPrice:0,balance:0},
+        {vehicle:"buffalo",vehicleLabel:"Bravado Buffalo",plate:"SIFO 22",state:1,fuel:74,engine:840,body:930,garage:"Legion Square",type:"public",index:"legion",depotPrice:0,balance:1250},
+        {vehicle:"zentorno",vehicleLabel:"Pegassi Zentorno",plate:"SIFO 77",state:0,fuel:38,engine:620,body:480,garage:"Legion Square",type:"public",index:"legion",depotPrice:500,balance:0},
+        {vehicle:"baller",vehicleLabel:"Gallivanter Baller",plate:"SIFO 09",state:1,fuel:58,engine:420,body:640,garage:"Legion Square",type:"public",index:"legion",depotPrice:0,balance:0}
+    ];
+    document.getElementById("garage-header").textContent = "Legion Square";
+    render();
+    displayUI();
 }
