@@ -1,19 +1,26 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <title>Garage UI</title>
-        <link rel="stylesheet" href="style.css" />
-    </head>
-
-    <body>
-        <div class="container">
-            <div class="header">
-                <div class="garage-header" id="garage-header">Legion Square</div>
-                <img src="logo.png" id="garage-logo" alt="Garage Logo" class="garage-logo" />
-            </div>
-            <div class="vehicle-table" id="vehicle-container"></div>
-        </div>
-        <script src="script.js"></script>
-    </body>
-</html>
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Garage</title><link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="garage-shell" id="garage-shell">
+<aside class="sidebar">
+<div class="brand"><img src="logo.png" id="garage-logo" alt="Garage"><div><span class="eyebrow">VEHICLE MANAGEMENT</span><strong>GARAGE</strong></div></div>
+<div class="garage-location"><span class="location-dot"></span><div><small>Current garage</small><h2 id="garage-header">Legion Square</h2></div></div>
+<div class="sidebar-stats"><div><span id="vehicle-count">0</span><small>Vehicles</small></div><div><span id="stored-count">0</span><small>Stored</small></div></div>
+<div class="hint"><span class="key">ESC</span><span>Close garage</span></div>
+</aside>
+<section class="content">
+<header class="content-header">
+<div><span class="eyebrow">YOUR VEHICLES</span><h1>My Garage</h1></div>
+<div class="header-actions"><div class="search"><span class="search-icon">⌕</span><input id="search" type="text" placeholder="Search vehicle or plate..." autocomplete="off"></div><button class="close-btn" id="close-btn" aria-label="Close">×</button></div>
+</header>
+<nav class="filters"><button class="filter active" data-filter="all">All <b id="all-count">0</b></button><button class="filter" data-filter="stored">Stored <b id="stored-filter-count">0</b></button><button class="filter" data-filter="out">Out <b id="out-count">0</b></button></nav>
+<div class="vehicle-grid" id="vehicle-container"></div>
+<div class="empty" id="empty"><div class="empty-icon">⌁</div><h3>No vehicles found</h3><p>Try another search or filter.</p></div>
+</section>
+</main>
+<script src="script.js"></script>
+</body></html>
