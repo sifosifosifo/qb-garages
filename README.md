@@ -4,7 +4,7 @@
 * Park owned cars in public garages.
 * You can only parks vehicles that you own in public garages. 
 
-![image](https://github.com/qbcore-framework/qb-garages/assets/57848836/b56344ea-a902-4c07-9ae6-4984486648d2)
+![image](preview.png)
 
 **House Garages**
 * Park owned cars in house garages. To add a house garage, you must have the realestate job and do /addgarage.
