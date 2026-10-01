@@ -16,11 +16,15 @@ Config.VehicleClass = {
 }
 
 Config.Garages = {
-    motelgarage = {
-        label = 'Motel Parking',
-        takeVehicle = vector3(274.29, -334.15, 44.92),
+    hotelgarage = {
+        label = 'hotel parking',
+        takeVehicle = vector3(-294.87, -984.93, 31.08),
         spawnPoint = {
-            vector4(265.96, -332.3, 44.51, 250.68)
+            vector4(-297.86, -990.47, 30.79, 161.56),
+            vector4(-301.29, -989.28, 30.79, 161.82),
+            vector4(-304.64, -987.54, 30.79, 156.07),
+            vector4(-308.11, -986.13, 30.79, 161.12),
+            vector4(-311.62, -985.2, 30.79, 162.78)
         },
         showBlip = true,
         blipName = 'Public Parking',
