@@ -26,8 +26,10 @@
 * Allows depot cars to be retreived from here. Cops can do /depot [price] to send a car to the depot.
 
 **Auto Respawn Config**
-* If set to true, cars that are currently outside will be placed in the last garage used.
-* If set to false, cars that are currently outside will be placed in the depot.
+* On resource start, vehicles marked outside that no longer exist in the world are recovered.
+* If set to true, recovered vehicles are placed in their last garage; vehicles without a valid garage are available from the depot.
+* If set to false, recovered vehicles are placed in the depot.
+* Vehicles still present in the world remain marked outside and cannot be taken out again.
 
 **Shared garages Config**
 * If set to true, Gang and job garages are shared.
@@ -60,4 +62,3 @@
 
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>
-

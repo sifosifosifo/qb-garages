@@ -276,15 +276,20 @@ end)
 local function CheckPlate(vehicle, plateToSet)
     local vehiclePlate = promise.new()
     CreateThread(function()
-        while true do
-            Wait(500)
+        for _ = 1, 20 do
+            if not DoesEntityExist(vehicle) then
+                vehiclePlate:resolve(false)
+                return
+            end
             if GetVehicleNumberPlateText(vehicle) == plateToSet then
                 vehiclePlate:resolve(true)
                 return
             else
                 SetVehicleNumberPlateText(vehicle, plateToSet)
             end
+            Wait(250)
         end
+        vehiclePlate:resolve(DoesEntityExist(vehicle) and GetVehicleNumberPlateText(vehicle) == plateToSet)
     end)
     return vehiclePlate
 end
@@ -295,13 +300,34 @@ RegisterNetEvent('qb-garages:client:takeOutGarage', function(data)
             local location = GetSpawnPoint(data.garage)
             if not location then return end
             QBCore.Functions.TriggerCallback('qb-garages:server:spawnvehicle', function(netId, properties, vehPlate)
-                if not netId then
+                if not netId or netId == 0 then
                     QBCore.Functions.Notify(Lang:t('error.no_vehicles'), 'error', 5000)
                     return
                 end
-                while not NetworkDoesNetworkIdExist(netId) do Wait(10) end
+                local attempts = 0
+                while not NetworkDoesNetworkIdExist(netId) and attempts < 100 do
+                    Wait(50)
+                    attempts = attempts + 1
+                end
+                if not NetworkDoesNetworkIdExist(netId) then
+                    QBCore.Functions.Notify(Lang:t('error.no_vehicles'), 'error', 5000)
+                    return
+                end
                 local veh = NetworkGetEntityFromNetworkId(netId)
-                Citizen.Await(CheckPlate(veh, vehPlate))
+                attempts = 0
+                while (veh == 0 or not DoesEntityExist(veh)) and attempts < 100 do
+                    Wait(50)
+                    veh = NetworkGetEntityFromNetworkId(netId)
+                    attempts = attempts + 1
+                end
+                if veh == 0 or not DoesEntityExist(veh) then
+                    QBCore.Functions.Notify(Lang:t('error.no_vehicles'), 'error', 5000)
+                    return
+                end
+                if not Citizen.Await(CheckPlate(veh, vehPlate)) then
+                    QBCore.Functions.Notify(Lang:t('error.no_vehicles'), 'error', 5000)
+                    return
+                end
                 QBCore.Functions.SetVehicleProperties(veh, properties)
                 exports[Config.FuelResource]:SetFuel(veh, data.stats.fuel)
                 TriggerServerEvent('qb-garages:server:updateVehicleState', 0, vehPlate)

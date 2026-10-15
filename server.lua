@@ -2,15 +2,38 @@ local QBCore = exports['qb-core']:GetCoreObject({ 'Functions' })
 local sharedVehicles = exports['qb-core']:GetShared('Vehicles')
 local OutsideVehicles = {}
 
+local function NormalizePlate(plate)
+    if not plate then return nil end
+    return plate:match('^%s*(.-)%s*$')
+end
+
+local function GetWorldVehiclePlates()
+    local plates = {}
+    for _, vehicle in ipairs(GetAllVehicles()) do
+        if DoesEntityExist(vehicle) then
+            local plate = NormalizePlate(GetVehicleNumberPlateText(vehicle))
+            if plate and plate ~= '' then plates[plate] = true end
+        end
+    end
+    return plates
+end
+
 -- Handler
 
 AddEventHandler('onResourceStart', function(resource)
     if resource == GetCurrentResourceName() then
         Wait(100)
-        if Config['AutoRespawn'] then
-            MySQL.update('UPDATE player_vehicles SET state = 1 WHERE state = 0', {})
-        else
-            MySQL.update('UPDATE player_vehicles SET depotprice = 500 WHERE state = 0', {})
+        local existingVehiclePlates = GetWorldVehiclePlates()
+        local vehicles = MySQL.query.await('SELECT plate FROM player_vehicles WHERE state = 0 AND depotprice = 0', {})
+        for _, vehicle in pairs(vehicles) do
+            local plate = NormalizePlate(vehicle.plate)
+            if plate and not existingVehiclePlates[plate] then
+                if Config.AutoRespawn then
+                    MySQL.update.await('UPDATE player_vehicles SET state = 1 WHERE plate = ? AND state = 0 AND depotprice = 0', { vehicle.plate })
+                else
+                    MySQL.update.await('UPDATE player_vehicles SET state = 1, depotprice = 500 WHERE plate = ? AND state = 0 AND depotprice = 0', { vehicle.plate })
+                end
+            end
         end
     end
 end)
@@ -83,7 +106,16 @@ QBCore.Functions.CreateCallback('qb-garages:server:GetGarageVehicles', function(
     local vehicles
 
     if type == 'depot' then
-        vehicles = MySQL.rawExecute.await('SELECT * FROM player_vehicles WHERE citizenid = ? AND depotprice > 0', { citizenId })
+        local ownedVehicles = MySQL.rawExecute.await('SELECT * FROM player_vehicles WHERE citizenid = ?', { citizenId })
+        local worldVehiclePlates = GetWorldVehiclePlates()
+        vehicles = {}
+        for _, vehicle in pairs(ownedVehicles) do
+            local hasUnknownGarage = not vehicle.garage or vehicle.garage == '' or not Config.Garages[vehicle.garage]
+            local isOutside = worldVehiclePlates[NormalizePlate(vehicle.plate)]
+            if (tonumber(vehicle.depotprice) or 0) > 0 or (tonumber(vehicle.state) ~= 0 and hasUnknownGarage and not isOutside) then
+                vehicles[#vehicles + 1] = vehicle
+            end
+        end
     elseif Config.SharedGarages then
         vehicles = MySQL.rawExecute.await('SELECT * FROM player_vehicles WHERE citizenid = ?', { citizenId })
     else
@@ -135,12 +167,34 @@ QBCore.Functions.CreateCallback('qb-garages:server:spawnvehicle', function(sourc
     end
     local vehType = sharedVehicles[ownedVehicle.vehicle] and sharedVehicles[ownedVehicle.vehicle].type or GetVehicleTypeByModel(ownedVehicle.vehicle)
     local hash = type(ownedVehicle.vehicle) == 'number' and ownedVehicle.vehicle or type(ownedVehicle.vehicle) == 'string' and GetHashKey(ownedVehicle.vehicle) or nil
-    if not hash then
+    if not hash or not coords or not coords.x or not coords.y or not coords.z then
         cb(nil, nil, nil)
         return
     end
-    local veh = CreateVehicleServerSetter(hash, vehType, coords.x, coords.y, coords.z, coords.w)
+    local spawnCoords = vector4(coords.x + 0.0, coords.y + 0.0, coords.z + 0.0, (coords.w or 0.0) + 0.0)
+    local success, veh = pcall(QBCore.Functions.CreateVehicle, source, hash, vehType, spawnCoords, false)
+    if not success then
+        print(('[qb-garages] Failed to create vehicle %s (%s): %s'):format(plate, ownedVehicle.vehicle, veh))
+        cb(nil, nil, nil)
+        return
+    end
+    if not veh or veh == 0 or not DoesEntityExist(veh) then
+        print(('[qb-garages] Vehicle creation returned no entity for plate %s (%s)'):format(plate, ownedVehicle.vehicle))
+        cb(nil, nil, nil)
+        return
+    end
     local netId = NetworkGetNetworkIdFromEntity(veh)
+    local attempts = 0
+    while netId == 0 and attempts < 50 do
+        Wait(100)
+        netId = NetworkGetNetworkIdFromEntity(veh)
+        attempts = attempts + 1
+    end
+    if netId == 0 then
+        DeleteEntity(veh)
+        cb(nil, nil, nil)
+        return
+    end
     SetVehicleNumberPlateText(veh, plate)
     local vehProps = {}
     if ownedVehicle.mods then vehProps = json.decode(ownedVehicle.mods) end
@@ -152,6 +206,12 @@ end)
 -- Checks if a vehicle can be spawned based on its type and location.
 QBCore.Functions.CreateCallback('qb-garages:server:IsSpawnOk', function(_, cb, plate, type)
     if OutsideVehicles[plate] and DoesEntityExist(OutsideVehicles[plate].entity) then
+        cb(false)
+        return
+    end
+    local normalizedPlate = NormalizePlate(plate)
+    local worldVehiclePlates = GetWorldVehiclePlates()
+    if normalizedPlate and worldVehiclePlates[normalizedPlate] then
         cb(false)
         return
     end

@@ -40,8 +40,15 @@ function closeGarageMenu() {
 function displayUI() { document.getElementById("garage-shell").style.display = "flex"; }
 
 function getStatus(v) {
-    if (v.state === 2) return {text:"Impound", className:"impound", disabled:true};
+    if (v.state === 2) {
+        if (v.type === "depot") {
+            if (v.depotPrice > 0) return {text:"$" + Number(v.depotPrice).toFixed(0), className:"stored", disabled:false};
+            return {text:"Take Out", className:"stored", disabled:false};
+        }
+        return {text:"Impound", className:"impound", disabled:true};
+    }
     if (v.state === 0) {
+        if (v.type === "depot" && v.depotPrice <= 0) return {text:"Out", className:"out", disabled:true};
         if (v.depotPrice > 0 && v.type === "public") return {text:"Depot", className:"out", disabled:true};
         if (v.depotPrice > 0 && v.type === "depot") return {text:"$" + Number(v.depotPrice).toFixed(0), className:"stored", disabled:false};
         return {text:"Out", className:"out", disabled:false};
